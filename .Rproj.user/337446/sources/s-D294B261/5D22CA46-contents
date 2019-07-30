@@ -1,0 +1,207 @@
+.libPaths("H:/myCitrixFiles/Documents/R/win-library/3.2")
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(GMF)
+library(stringr)
+library(magrittr)
+
+db <- GMF$Connector$GameMonitoring$FixedAuthConnect()
+
+##db query
+#ugdata <- db$ExecuteFile('query.sql')
+bldata <- db$ExecuteFile('bl_query.sql')
+
+ugdata <- readRDS('respin_data.rda')
+
+fsdata <- db$ExecuteFile('firstsession_query.sql')
+
+##----------------------- Analysis -----------------------##
+
+
+ugdata <- ugdata %>%
+  separate(RespinReelCosts, into=c('r1','r2','r3','r4','r5'), sep=',') %>%
+  mutate(r1 = as.numeric(ifelse(RespunReel==0, r1, 0)),
+         r2 = as.numeric(ifelse(RespunReel==1, r2, 0)),
+         r3 = as.numeric(ifelse(RespunReel==2, r3, 0)),
+         r4 = as.numeric(ifelse(RespunReel==3, r4, 0)),
+         r5 = as.numeric(ifelse(RespunReel==4, r5, 0))) %>%
+  mutate(Wager_Respin = r1+r2+r3+r4+r5) %>%
+  select(-r1,-r2,-r3,-r4,-r5) %>%
+  mutate(Wager_Total = ifelse(IsRespin==0, Wager_Cents, 0) + Wager_Respin) %>%
+  mutate(Spin = ifelse(IsRespin == 0, 'Spin', 'Respin'))
+
+
+player_level <- ugdata %>%
+  group_by(UserID) %>%
+  summarise(Wager_Regular = sum(ifelse(IsRespin==0, Wager_Cents, 0)), 
+            Wager_Respin = sum(Wager_Respin), 
+            Wager_Total = sum(Wager_Total), 
+            Spins=n(), 
+            Respins=sum(IsRespin)) %>%
+  mutate(Avg_Wager = Wager_Total/Spins, 
+         Avg_Wager_Respin = Wager_Respin/Respins,
+         Avg_Wager_Spin = Wager_Regular/(Spins - Respins))
+
+
+high_summary <- player_level %>%
+  summarise(Spins_Total = sum(Spins),
+            Spins_Regular = sum(Spins) - sum(Respins),
+            Spins_Respin = sum(Respins),
+            Wager_Total = sum(Wager_Total)/100,
+            Wager_Regular = sum(Wager_Regular)/100,
+            Wager_Respin = sum(Wager_Respin)/100)
+
+player_hist <- player_level %>%
+  gather(key='Wager', value='Amount', Wager_Regular, Wager_Respin) %>%
+  mutate(Amount = ifelse(Amount==0, NA, Amount))
+
+#Player distribution by total spend
+plot_wager_hist <- ggplot(player_hist) +
+  geom_histogram(aes(x=Amount/100, fill=Wager), position='identity', alpha=0.5) +
+  scale_x_log10() +
+  xlab('Wager') +
+  ggtitle('Placed bets by Wager size')
+
+plot_wager_histw <- ggplot(player_hist) +
+  geom_histogram(aes(x=Amount/100, y=..density.., weight = Amount, fill=Wager), position='identity', alpha=0.5) +
+  scale_x_log10() +
+  xlab('Wager') +
+  ggtitle('Placed bets by Wager size - weighted by total wager')
+
+
+#Distribution of wagers
+plot_indwager_hist <- ggplot(filter(ugdata, EventNumber == 1)) +
+  geom_histogram(aes(x=Wager_Total/100, fill=Spin), position='identity', alpha=0.5) +
+  scale_x_log10() +
+  xlab('Wager') +
+  ggtitle('Individual Wager Size by Count')
+
+plot_indwager_histw <- ggplot(filter(ugdata, EventNumber == 1)) +
+  geom_histogram(aes(x=Wager_Total/100, y=..density.., weight = Wager_Total, fill=Spin), position='identity', alpha=0.5) +
+  scale_x_log10() +
+  xlab('Wager') +
+  ggtitle('Individual Wager Size by Total Wager')
+
+
+respin_summary <- player_level %>%
+  mutate(Respin = ifelse(Respins>0, T, F)) %>%
+  group_by(Respin) %>%
+  summarise(Median_Wager = median(Avg_Wager),
+            Average_Wager = mean(Avg_Wager),
+            Median_Spins = median(Spins),
+            Average_Spins = mean(Spins))
+
+plot_avgwager <- ggplot(mutate(player_level, Respin = ifelse(Respins>0, T, F))) +
+  geom_boxplot(aes(x=Respin, y=Avg_Wager/100, fill=Respin), alpha=0.5) +
+  scale_y_log10() +
+  coord_flip() +
+  xlab('Respin') +
+  ylab('Avgerage Wager')
+
+plot_avgspins <- ggplot(mutate(player_level, Respin = ifelse(Respins>0, T, F))) +
+  geom_boxplot(aes(x=Respin, y=Spins, fill=Respin), alpha=0.5) +
+  scale_y_log10() +
+  coord_flip() +
+  xlab('Respin') +
+  ylab('Total Spins')
+
+
+
+cent_respin <- ugdata %>%
+  filter(IsRespin == 1) %>%
+  mutate(zero_value_respin = ifelse(Wager_Respin == 1, T, F)) %>%
+  group_by(zero_value_respin) %>%
+  summarise(Spins = n(), Wager_Total = sum(Wager_Total))
+
+
+
+client_data <- ugdata %>%
+  inner_join(bldata, by=(c('UserID','UserTransNumber')))
+
+client_summary <- client_data %>%
+  mutate(Platform=ifelse(ClientID==40300, 'Mobile', 'Desktop')) %>%
+  group_by(Platform) %>%
+  summarise(Wager_Regular = sum(ifelse(IsRespin==0, Wager_Cents, 0)), 
+            Wager_Respin = sum(Wager_Respin), 
+            Wager_Total = sum(Wager_Total), 
+            Spins_Regular=n() - sum(IsRespin), 
+            Spins_Respin=sum(IsRespin),
+            Spins_Total = n())
+
+client_player_level <- client_data %>%
+  mutate(Platform=ifelse(ClientID==40300, 'Mobile', 'Desktop')) %>%
+  group_by(UserID, Platform) %>%
+  summarise(Wager_Regular = sum(ifelse(IsRespin==0, Wager_Cents, 0)), 
+            Wager_Respin = sum(Wager_Respin), 
+            Wager_Total = sum(Wager_Total), 
+            Spins_Regular=n() - sum(IsRespin), 
+            Spins_Respin=sum(IsRespin),
+            Spins_Total = n())
+
+ggplot(filter(client_player_level, Spins_Total > 19)) +
+  geom_density(aes(x=Spins_Respin/Spins_Total, fill=Platform), alpha=0.5)
+
+#Session Dropoffs
+
+first_sessions <- ugdata %>%
+  inner_join(fsdata, by=c("UserID"="userid", "UserTransNumber"="usertransnumber")) %>%
+  group_by(sessionid) %>%
+  summarise(With_Respin = ifelse(sum(IsRespin) > 0, T, F),
+            Spins = n(),
+            TotalWager = sum(Wager_Total)/100)
+
+
+dropoffs <- first_sessions %>%
+  mutate(Spin_bucket = case_when(.$Spins > 500 ~ '500+',
+                                 .$Spins > 250 ~ '251-500', .$Spins > 100 ~ '101-250', .$Spins > 75 ~ '76-100',
+                                 .$Spins > 50 ~ '51-75', .$Spins > 30 ~ '31-50', .$Spins > 20 ~ '21-30',
+                                 .$Spins > 10 ~ '11-20', .$Spins > 5 ~ '6-10', .$Spins > 1 ~ '2-5', T ~ '1')) %>%
+  group_by(With_Respin, Spin_bucket) %>%
+  summarise(NumSessions = n()) %>%
+  mutate(Spin_bucket = factor(Spin_bucket, levels = c('1','2-5','6-10','11-20','21-30','31-50','51-75','76-100','101-250','251-500','500+'))) %>%
+  group_by(With_Respin) %>%
+  mutate(Player_Dropoff = NumSessions/sum(NumSessions)) %>%
+  arrange(With_Respin, Spin_bucket) %>%
+  mutate(Cum_Player_Dropoff = cumsum(Player_Dropoff)) %>%
+  ungroup() 
+
+plot_dropoff <- ggplot(dropoffs, aes(x=Spin_bucket, y=Cum_Player_Dropoff)) +
+  geom_line(aes(colour=With_Respin, group=With_Respin), size=1) +
+  geom_point(aes(colour=With_Respin, shape=With_Respin), size=2)
+
+
+#tidy data for rmd passthrough
+
+respin_summary_wager <- respin_summary %>%
+  select(-Median_Spins, -Average_Spins)
+
+respin_summary_spins <- respin_summary %>%
+  select(-Median_Wager, -Average_Wager)
+
+cent_respin_summary <- cent_respin %>%
+  mutate(Spins = Spins/sum(Spins), Wager = Wager_Total/sum(Wager_Total)) %>%
+  mutate(Spins = sprintf('%.2f %%', Spins*100), Wager = sprintf('%.2f %%', Wager*100)) %>%
+  select(-Wager_Total)
+
+dropoffs_present <- dropoffs %>%
+  mutate(Player_Dropoff = sprintf('%.1f %%', Player_Dropoff*100), Cum_Player_Dropoff = sprintf('%.1f %%', Cum_Player_Dropoff*100))
+
+
+
+
+env <- new.env()
+env$plot_wager_hist <- plot_wager_hist
+env$plot_wager_histw <- plot_wager_histw
+env$plot_avgwager <- plot_avgwager
+env$plot_avgspins <- plot_avgspins
+env$plot_dropoff <- plot_dropoff
+env$respin_summary_wager <- respin_summary_wager
+env$respin_summary_spins <- respin_summary_spins
+env$cent_respin_summary <- cent_respin_summary
+env$dropoffs <- dropoffs_present
+
+
+GMF$Util$RMD2HTML64('Analysis.Rmd', environment = env, outputFilePath = 'BookOfOz_Respin2.html')
+

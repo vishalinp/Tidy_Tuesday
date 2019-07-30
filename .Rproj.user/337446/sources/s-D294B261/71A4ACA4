@@ -1,0 +1,23 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1564495695751.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1773525682",
+    "id" : "71A4ACA4",
+    "lastKnownWriteTime" : 1564500904,
+    "last_content_update" : 1564500815330,
+    "path" : "H:/R/Tidy_Tuesday/2019-07-30/team.R",
+    "project_path" : "2019-07-30/team.R",
+    "properties" : {
+        "cursorPosition" : "39,0",
+        "scrollLine" : "0",
+        "tempName" : "Untitled1"
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

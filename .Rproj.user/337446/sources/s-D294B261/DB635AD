@@ -1,0 +1,29 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1564495793050.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "DB635AD",
+    "lastKnownWriteTime" : 14918371337502765,
+    "last_content_update" : 1564495793050,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "4363FB5C",
+        "caption" : "video_games",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=video_games&cache_key=4363FB5C",
+        "displayedObservations" : "26688",
+        "environment" : "",
+        "object" : "video_games",
+        "preview" : "0",
+        "totalObservations" : "26688",
+        "variables" : "10"
+    },
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}
